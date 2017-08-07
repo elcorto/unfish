@@ -9,9 +9,11 @@ pj = os.path.join
 # https://hackaday.io/project/12384-autofan-automated-control-of-air-flow/log/41862-correcting-for-lens-distortions
 # http://docs.opencv.org/2.4
 # http://docs.opencv.org/3.0-beta/doc/py_tutorials/py_calib3d/py_calibration/py_calibration.html
+# https://codeyarns.com/2014/01/16/how-to-convert-between-numpy-array-and-pil-image/
 
 
-def calibrate(img_names, fraction=0.2, maxiter=30, tol=0.1):
+def calibrate(img_names, fraction=0.2, maxiter=30, tol=0.1, pattern_size=(9,6)):
+    # pattern_size = size of chessboard pattern (number of corners)
     # maxiter, tol
     # termination criteria for calibrateCamera
     #
@@ -19,8 +21,11 @@ def calibrate(img_names, fraction=0.2, maxiter=30, tol=0.1):
     # counter-bending at the image corners)
     term = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, maxiter, tol)
     
+    # fraction:
     # original images scaled down by factor `fraction`: chess_pics/small used
-    # for calibration instead of chess_pics/orig
+    # for calibration instead of chess_pics/orig b/c it is MUCH faster and the
+    # accuracy of findChessboardCorners on the scaled down calibration images
+    # is by far enough
     scale_h = scale_w = img_points_scale = 1.0/fraction
     # instead of fraction, here are the
     # exact scale factors based on actual image sizes, might differ very
@@ -28,9 +33,8 @@ def calibrate(img_names, fraction=0.2, maxiter=30, tol=0.1):
 ##    scale_w = 3264/653.0
 ##    scale_h = 2448/490.0
 ##    img_points_scale = np.array([scale_w, scale_h], dtype=np.float32)[None,:]
-    
-    # size of chessboard pattern (number of corners)
-    pattern_size = (9, 6)
+   
+    # XXX quite involved numpyology here, can this be some in a simpler way??
     # rectangular grid of chessboard corners, viewed along chessboard plane
     # normal vector; z coord is zero; the "real" object = the undistorted chessboard
     pattern_points = np.zeros((np.prod(pattern_size), 3), np.float32 )
@@ -62,6 +66,7 @@ def calibrate(img_names, fraction=0.2, maxiter=30, tol=0.1):
 ##            cv2.drawChessboardCorners(img, pattern_size, corners, found)
 ##            cv2.imshow('img',img)
 ##            cv2.waitKey(5000)
+            # corners_fine.reshape(-1,2).shape == (54,2)
             # list of (54,2) arrays, coords of chessboard corners in original
             # image pixel coords scale (img_points_scale applied)
             img_points_lst.append(corners_fine.reshape(-1, 2))
@@ -81,6 +86,8 @@ def calibrate(img_names, fraction=0.2, maxiter=30, tol=0.1):
     # int stuff only when scaling, could also simply use the orig w and h of
     # the orig images :)
     size = (int(round(w*scale_w)), int(round(h*scale_h)))
+    # CALIB_RATIONAL_MODEL: more complex model with 8 parameters instead of 5
+    # (default), gives much better results
     rms, camera_matrix, coeffs, rvecs, tvecs = cv2.calibrateCamera(pattern_points_lst,
                                                                    img_points_lst, 
                                                                    size,
@@ -89,7 +96,8 @@ def calibrate(img_names, fraction=0.2, maxiter=30, tol=0.1):
                                                                    None,
                                                                    cv2.CALIB_RATIONAL_MODEL,
                                                                    term)
-    # XXX not sure about the math here
+    # XXX not sure about the math here, also only operations on numpy arrays
+    # below, make simpler
     mean_error = 0
     for i in range(len(pattern_points_lst)):
 	imgpoints2, _ = cv2.projectPoints(pattern_points_lst[i], rvecs[i], tvecs[i], camera_matrix, coeffs)
@@ -101,46 +109,46 @@ def calibrate(img_names, fraction=0.2, maxiter=30, tol=0.1):
             'mean_error': mean_error}
 
 
-def apply(img_names, exif={}, dr='converted'):
+def apply(img_names, dr='converted'):
+    # EXIF: cv2.imread() / cv2.imwrite() use plain numpy 3d arrays, we need
+    # to fiddle around w/ PIL to extract and add back the EXIF data
+    # (orientation, date, camera model, etc, with orientation being the
+    # most important information)
+
+    # XXX use common data storage w/ calibrate() such as .unfish/ or simply put
+    # all infos in a dict and pickle to disk, or use a hdf5 file
     camera_matrix = np.load('camera_matrix.npy')
     coeffs = np.load('coeffs.npy')
+    old_size_src = None
+    cm = {}
 
     if not os.path.exists(dr):
         os.makedirs(dr)
 
     for ifn,fn in enumerate(img_names):
-        print(fn)
-        # NOTE: cv2.imread() / imwrite() use plain numpy 3d arrays, we need to
-        # fiddle around w/ PIL to extract and add back the EXIF data
-        # (orientation, date, camera model, etc, with orientation being the
-        # most important information)
-#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-##        src = cv2.imread(fn)
-#--------------------------------
+        tgt = pj(dr, os.path.basename(fn))
+        if os.path.exists(tgt):
+            print("skip: {}".format(fn))
+            continue
         pil_img = PIL.Image.open(fn)
-        # XXX better way to tranform PIL Image -> np.array??
         src = np.array(pil_img)
-#<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
         hh,ww = src.shape[:2]
-        if ifn == 0:
-            size_src = (ww, hh)
+        size_src = (ww, hh)
+        print("{} {}".format(fn, size_src))
+        if not cm.get(size_src,None):
             camera_matrix_new, roi = cv2.getOptimalNewCameraMatrix(camera_matrix,
                                                                    coeffs, size_src, 0,
                                                                    size_src)
-        assert (ww,hh) == size_src
+            print("new camera matrix for size: {}".format(size_src))
+            cm[size_src] = {'cm': camera_matrix_new,
+                            'roi': roi}
         mapx, mapy = cv2.initUndistortRectifyMap(camera_matrix, coeffs, 
-                                                 None, camera_matrix_new, size_src,
+                                                 None, cm[size_src]['cm'], size_src,
                                                  cv2.CV_32FC1)
         
         dst = cv2.remap(src, mapx, mapy, cv2.INTER_LINEAR)
-
-#>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-##        cv2.imwrite(pj(dr, os.path.basename(fn)), dst)
-#--------------------------------
-        tgt = pj(dr, os.path.basename(fn))
         im = PIL.Image.fromarray(dst)
         im.save(tgt, exif=pil_img.info["exif"])
-#<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
 
 if __name__ == '__main__':
@@ -170,6 +178,4 @@ if __name__ == '__main__':
         np.save('coeffs.npy', ret['coeffs'])
     elif args.sub == 'apply':
         apply(args.files, dr=args.dir)
-
-
 
