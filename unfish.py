@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 
 import numpy as np
 import cv2, json
@@ -7,59 +7,71 @@ import PIL.Image
 pj = os.path.join
 
 # https://hackaday.io/project/12384-autofan-automated-control-of-air-flow/log/41862-correcting-for-lens-distortions
-# http://docs.opencv.org/2.4
-# http://docs.opencv.org/3.0-beta/doc/py_tutorials/py_calib3d/py_calibration/py_calibration.html
+# http://docs.opencv.org/3.3.0/dc/dbb/tutorial_py_calibration.html
 # https://codeyarns.com/2014/01/16/how-to-convert-between-numpy-array-and-pil-image/
 
+# numpy: shape = (hh, ww) = (nrows, ncols)
+# opencv: size = (ww, hh)
 
 def calibrate(img_names, fraction=0.2, maxiter=30, tol=0.1, pattern_size=(9,6)):
-    # pattern_size = size of chessboard pattern (number of corners)
-    # maxiter, tol
-    # termination criteria for calibrateCamera
-    #
-    # maxiter=1000 and tol=0.0001 makes results worse again (too much
-    # counter-bending at the image corners)
-    term = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, maxiter, tol)
+    """
+    Parameters
+    ----------
+    img_names : sequence
+        list of calibration image files
+    fraction : float
+        factor by which calibration images are scaled down 
+        by, e.g. makesmall.sh
+    maxiter, tol : termination criteria for findChessboardCorners and
+        calibrateCamera, see opencv docs
+    pattern_size : tuple
+        size of chessboard pattern (number of corners)
+
+    Notes
+    -----
+    termination criteriam : maxiter=1000 and tol=0.0001 makes results worse
+    again (too much counter-bending at the image corners) .. strange
     
-    # fraction:
-    # original images scaled down by factor `fraction`: chess_pics/small used
-    # for calibration instead of chess_pics/orig b/c it is MUCH faster and the
-    # accuracy of findChessboardCorners on the scaled down calibration images
-    # is by far enough
+    fraction : original images scaled down by factor `fraction` because
+    calibration is 
+    MUCH faster and the accuracy of findChessboardCorners on the scaled down
+    calibration images is by far enough. Difference of 1/fraction to exact
+    scale factors based on image size: example w/ actual scaled image sizes
+    for fraction=0.2, so 1/fraction = 5.0:
+        3264/653.0 = 4.998468606431853
+        2448/490.0 = 4.995918367346939
+    """ 
+    term = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, maxiter, tol)
     scale_h = scale_w = img_points_scale = 1.0/fraction
-    # instead of fraction, here are the
-    # exact scale factors based on actual image sizes, might differ very
-    # slightly from 1/fraction and from one another
-##    scale_w = 3264/653.0
-##    scale_h = 2448/490.0
-##    img_points_scale = np.array([scale_w, scale_h], dtype=np.float32)[None,:]
-   
-    # XXX quite involved numpyology here, can this be some in a simpler way??
+    
+    # XXX quite involved numpyology here, can this be dome in a simpler way??
     # rectangular grid of chessboard corners, viewed along chessboard plane
     # normal vector; z coord is zero; the "real" object = the undistorted chessboard
     pattern_points = np.zeros((np.prod(pattern_size), 3), np.float32 )
     pattern_points[:,:2] = np.indices(pattern_size).T.reshape(-1, 2)
     
+    # XXX get rid of pattern_points_lst, it a list of the same numpy array
     pattern_points_lst = []
     img_points_lst = []
-    h_old, w_old = None, None
+    shape_old = None
     for fn in img_names:
         print("processing {}".format(fn))
-        pil_img = PIL.Image.open(fn)
-        # convert grayscale
-        img = np.array(pil_img.convert('L'))
-##        img = cv2.imread(fn, 0)
-        h, w = img.shape[:2]
-
-        if h_old:
-            assert h == h_old, "h={}, h_old={}".format(h, h_old)
-            assert w == w_old
-        # corners: (54, 1, 2), coords of chessboard corners in pixel
-        # coordinates of `img`
+        # PIL: convert('L') = convert grayscale, PIL gives us the same numpy
+        # array shape regardless of EXIF orientation, while cv2.imread()
+        # rotates the images
+        img = np.array(PIL.Image.open(fn).convert('L'))
+        shape = img.shape[:2]
+        hh, ww = shape
+        if shape_old:
+            assert shape == shape_old, ("{} != old {}".format(shape, shape_old))
+        
+        # corners: (54, 1, 2) for pattern_points=(9,6), coords of chessboard
+        # corners in pixel coordinates of `img`
         found, corners = cv2.findChessboardCorners(img, pattern_size)
         if found:
-            # corners_fine: scale up here and refine on scaled coords,
-            # should gain some small percent in precision, but not much
+            # corners_fine: scale up to original size coordinates and refine
+            # corners, should gain some small percent in precision, but not
+            # much
             corners_fine = corners.copy() * img_points_scale
             cv2.cornerSubPix(img, corners_fine, (5, 5), (-1, -1), term)
 ##            cv2.drawChessboardCorners(img, pattern_size, corners, found)
@@ -69,31 +81,38 @@ def calibrate(img_names, fraction=0.2, maxiter=30, tol=0.1, pattern_size=(9,6)):
             # list of (54,2) arrays, coords of chessboard corners in original
             # image pixel coords scale (img_points_scale applied)
             img_points_lst.append(corners_fine.reshape(-1, 2))
-            h_old, w_old = h, w
+            shape_old = shape
             # XXX useless, list of the same array over and over!! optimize!!!
             pattern_points_lst.append(pattern_points)
         else:
             print('chessboard not found')
             continue
-        
-   
-    # XXX only if we use drawChessboardCorners() !!!
-    cv2.destroyAllWindows()    
+
+##    # XXX only if we use drawChessboardCorners() !!!
+##    # not implemented in pip3-installed version of opencv
+##    cv2.destroyAllWindows()
 
     if len(pattern_points_lst) > 0:
         print("calibrateCamera")
-        # int stuff only when scaling, could also simply use the orig w and h of
-        # the orig images :)
-        size = (int(round(w*scale_w)), int(round(h*scale_h)))
-        # CALIB_RATIONAL_MODEL: more complex model with 8 parameters instead of 5
-        # (default), gives much better results
+        # int(round(...)) only when scaling with img_points_scale, could also
+        # simply use the orig w and h of the orig images :)
+        size = (int(round(ww*scale_w)), int(round(hh*scale_h)))
+        # CALIB_RATIONAL_MODEL: more complex model with 8 parameters (default 5
+        # + params k4,k5 and k6) which gives much better results. Apparently
+        # the way to enable multiple flags is to add them. With
+        # CALIB_THIN_PRISM_MODEL and CALIB_TILTED_MODEL, more parameters are
+        # added to the model (s1,s2,s3,s4) and (tau_x and tau_y), which,
+        # however, doesn't make the results any better :)
+        flags = cv2.CALIB_RATIONAL_MODEL
+        ##flags = cv2.CALIB_RATIONAL_MODEL + cv2.CALIB_THIN_PRISM_MODEL
+        ##flags = cv2.CALIB_RATIONAL_MODEL + cv2.CALIB_THIN_PRISM_MODEL + cv2.CALIB_TILTED_MODEL
         rms, camera_matrix, coeffs, rvecs, tvecs = cv2.calibrateCamera(pattern_points_lst,
-                                                                       img_points_lst, 
+                                                                       img_points_lst,
                                                                        size,
                                                                        None,
                                                                        None, None,
                                                                        None,
-                                                                       cv2.CALIB_RATIONAL_MODEL,
+                                                                       flags,
                                                                        term)
         # XXX not sure about the math here, also only operations on numpy arrays
         # below, make simpler
@@ -104,13 +123,24 @@ def calibrate(img_names, fraction=0.2, maxiter=30, tol=0.1, pattern_size=(9,6)):
             error = cv2.norm(img_points_lst[i],imgpoints2.reshape(-1,2), cv2.NORM_L2)/len(imgpoints2)
             mean_error += error
         mean_error = mean_error / len(pattern_points_lst)
-        
+
         return {'camera_matrix': camera_matrix, 'rms': rms, 'coeffs': coeffs,
                 'mean_error': mean_error}
     else:
         return None
 
+
 def apply(img_names, dr='converted'):
+    """Apply image corrections (revert fisheye). Use camera matrix and model
+    coeffs written by :func:`calibrate`.
+
+    Parameters
+    ----------
+    img_names : sequence
+        list of to-be-corrected image files
+    dr : str
+        directory to which we write the corrected images
+    """
     # EXIF: cv2.imread() / cv2.imwrite() use plain numpy 3d arrays, we need
     # to fiddle around w/ PIL to extract and add back the EXIF data
     # (orientation, date, camera model, etc, with orientation being the
@@ -142,61 +172,58 @@ def apply(img_names, dr='converted'):
             print("new camera matrix for size: {}".format(size_src))
             cm[size_src] = {'cm': camera_matrix_new,
                             'roi': roi}
-        mapx, mapy = cv2.initUndistortRectifyMap(camera_matrix, coeffs, 
+        mapx, mapy = cv2.initUndistortRectifyMap(camera_matrix, coeffs,
                                                  None, cm[size_src]['cm'], size_src,
                                                  cv2.CV_32FC1)
-        
+
         im = PIL.Image.fromarray(cv2.remap(src, mapx, mapy, cv2.INTER_LINEAR))
         im.save(tgt, exif=pil_img.info["exif"])
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-  
+
     subparsers = parser.add_subparsers(dest='sub')
 
-    p_prepare = subparsers.add_parser('prep', 
+    p_prepare = subparsers.add_parser('prep',
                                        help='prepare calibration run, '
                                             'calculate rms error per calib image')
     p_prepare.add_argument('files', nargs='+')
-    
-    p_calibrate = subparsers.add_parser('calib', 
+
+    p_calibrate = subparsers.add_parser('calib',
                                         help='calibrate using chessboard '
                                              'images')
     p_calibrate.add_argument('files', nargs='+')
     p_calibrate.add_argument('-r', '--max-rms', default=None, type=float,
                              help='maximal allowed RMS error for calib image')
-     
-  
-    p_apply = subparsers.add_parser('apply', 
+
+
+    p_apply = subparsers.add_parser('apply',
                                     help='apply corrections to images'
                                          'images')
     p_apply.add_argument('files', nargs='+')
-    p_apply.add_argument('dir', default='corrected', nargs='?', 
+    p_apply.add_argument('dir', default='corrected', nargs='?',
                          help='target dir for corrected images [%(default)s]')
-   
+
     for sub in [p_prepare, p_calibrate]:
-        sub.add_argument('-f', '--fraction', default=1.0, type=float, 
+        sub.add_argument('-f', '--fraction', default=1.0, type=float,
                          help='factor by which calib images are smaller '
                               'than to-be-processed real images '
                               '[%(default)s]')
-  
+
     args = parser.parse_args(sys.argv[1:])
-    # chessboard pics for calibration
-    # ./this.py calibrate chess_pics/small/*
-    # ./this.py apply real_pics/orig/* 
-    
+
     if args.sub == 'calib':
         if args.max_rms:
             with open('rms_db.json') as fd:
                 rms_db = json.load(fd)
-            files = [k for k,v in rms_db.items() if v < args.max_rms] 
+            files = [k for k,v in rms_db.items() if v < args.max_rms]
         else:
             files = args.files
         ret = calibrate(files, fraction=args.fraction)
         if ret:
-            print "mean error: ", ret['mean_error']
-            print "RMS:", ret['rms']
+            print("mean error: {}".format(ret['mean_error']))
+            print("RMS: {}".format(ret['rms']))
             np.save('camera_matrix.npy', ret['camera_matrix'])
             np.save('coeffs.npy', ret['coeffs'])
         else:
