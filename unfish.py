@@ -131,18 +131,7 @@ def calibrate(img_names, fraction=0.2, maxiter=30, tol=0.1, pattern_size=(9,6)):
                                                                        None,
                                                                        flags,
                                                                        term)
-        # XXX not sure about the math here, also only operations on numpy arrays
-        # below, make simpler
-        print("calculate error")
-        mean_error = 0
-        for i in range(len(pattern_points_lst)):
-            imgpoints2, _ = cv2.projectPoints(pattern_points_lst[i], rvecs[i], tvecs[i], camera_matrix, coeffs)
-            error = cv2.norm(img_points_lst[i],imgpoints2.reshape(-1,2), cv2.NORM_L2)/len(imgpoints2)
-            mean_error += error
-        mean_error = mean_error / len(pattern_points_lst)
-
-        return {'camera_matrix': camera_matrix, 'rms': rms, 'coeffs': coeffs,
-                'mean_error': mean_error}
+        return {'camera_matrix': camera_matrix, 'rms': rms, 'coeffs': coeffs}
     else:
         return None
 
@@ -209,8 +198,7 @@ if __name__ == '__main__':
             files = args['<files>']
         ret = calibrate(files, fraction=float(args['--fraction']))
         if ret:
-            print("mean error: {}".format(ret['mean_error']))
-            print("RMS: {}".format(ret['rms']))
+            print("rms: {}".format(ret['rms']))
             np.save('camera_matrix.npy', ret['camera_matrix'])
             np.save('coeffs.npy', ret['coeffs'])
         else:
