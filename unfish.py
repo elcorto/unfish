@@ -1,8 +1,25 @@
 #!/usr/bin/python3
 
+"""
+usage:
+    unfish prep [-f <fraction> ] <files>...
+    unfish calib [-r <max-rms> -f <fraction>] <files>...
+    unfish apply [ -d <dir>] <files>...
+
+
+options:
+    -f <fraction>, --fraction <fraction>  fraction by which calibration files
+            have been scaled down (see makesmall.sh)
+    -r <max-rms>, --max-rms <max-rms>  in calibration, use only files with
+            rms reprojection error less than <max-rms>, uses rms_db.json
+            written by "prep"
+    -d <dir>, --dir <dir>  dir where to write corrected images 
+            [default: corrected]
+"""
+
 import numpy as np
-import cv2, json
-import os, sys, argparse
+import cv2, docopt
+import os, sys, json
 import PIL.Image
 pj = os.path.join
 
@@ -181,46 +198,16 @@ def apply(img_names, dr='converted'):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
+    args = docopt.docopt(__doc__, options_first=False)
 
-    subparsers = parser.add_subparsers(dest='sub')
-
-    p_prepare = subparsers.add_parser('prep',
-                                       help='prepare calibration run, '
-                                            'calculate rms error per calib image')
-    p_prepare.add_argument('files', nargs='+')
-
-    p_calibrate = subparsers.add_parser('calib',
-                                        help='calibrate using chessboard '
-                                             'images')
-    p_calibrate.add_argument('files', nargs='+')
-    p_calibrate.add_argument('-r', '--max-rms', default=None, type=float,
-                             help='maximal allowed RMS error for calib image')
-
-
-    p_apply = subparsers.add_parser('apply',
-                                    help='apply corrections to images'
-                                         'images')
-    p_apply.add_argument('files', nargs='+')
-    p_apply.add_argument('dir', default='corrected', nargs='?',
-                         help='target dir for corrected images [%(default)s]')
-
-    for sub in [p_prepare, p_calibrate]:
-        sub.add_argument('-f', '--fraction', default=1.0, type=float,
-                         help='factor by which calib images are smaller '
-                              'than to-be-processed real images '
-                              '[%(default)s]')
-
-    args = parser.parse_args(sys.argv[1:])
-
-    if args.sub == 'calib':
-        if args.max_rms:
+    if args['calib']:
+        if args['--max-rms']:
             with open('rms_db.json') as fd:
                 rms_db = json.load(fd)
-            files = [k for k,v in rms_db.items() if v < args.max_rms]
+            files = [k for k,v in rms_db.items() if v < float(args['--max-rms'])]
         else:
-            files = args.files
-        ret = calibrate(files, fraction=args.fraction)
+            files = args['<files>']
+        ret = calibrate(files, fraction=float(args['--fraction']))
         if ret:
             print("mean error: {}".format(ret['mean_error']))
             print("RMS: {}".format(ret['rms']))
@@ -228,10 +215,10 @@ if __name__ == '__main__':
             np.save('coeffs.npy', ret['coeffs'])
         else:
             print("unable to process data")
-    elif args.sub == 'prep':
+    elif args['prep']:
         rms_db = {}
-        for fn in args.files:
-            ret = calibrate([fn], fraction=args.fraction)
+        for fn in args['<files>']:
+            ret = calibrate([fn], fraction=float(args['--fraction']))
             if ret:
                 rms_db[fn] = ret['rms']
                 print("{fn}: {rms}".format(fn=fn, rms=ret['rms']))
@@ -239,6 +226,6 @@ if __name__ == '__main__':
                 print("#{fn}: no data".format(fn=fn))
         with open('rms_db.json', 'w') as fd:
             json.dump(rms_db, fd, indent=2)
-    elif args.sub == 'apply':
-        apply(args.files, dr=args.dir)
+    elif args['apply']:
+        apply(args['<files>'], dr=args['--dir'])
 
