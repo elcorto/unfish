@@ -6,6 +6,12 @@ usage:
     unfish calib [-r <max-rms> -f <fraction>] <files>...
     unfish apply [ -d <dir>] <files>...
 
+commands:
+    prep   optional preparation run, create rms_db.json
+    calib  calibration run, calculate and write camera matrix and camera model
+           coeffs using chessboard calibration images
+    apply  apply correction model to images
+
 
 options:
     -f <fraction>, --fraction <fraction>  fraction by which calibration files
