@@ -1,37 +1,5 @@
-#!/usr/bin/python3
-
-"""
-usage:
-    unfish prep [-f <fraction> ] <files>...
-    unfish calib [-r <max-rms> -f <fraction>] <files>...
-    unfish apply [ -d <dir>] <files>...
-
-commands:
-    prep   optional preparation run, create rms_db.json
-    calib  calibration run, calculate and write camera matrix and camera model
-           coeffs using chessboard calibration images
-    apply  apply correction model to images
-
-
-options:
-    -f <fraction>, --fraction <fraction>  fraction by which calibration files
-            have been scaled down (see makesmall.sh)
-    -r <max-rms>, --max-rms <max-rms>  in calibration, use only files with
-            rms reprojection error less than <max-rms>, uses rms_db.json
-            written by "prep"
-    -d <dir>, --dir <dir>  dir where to write corrected images 
-            [default: corrected]
-"""
-
 import numpy as np
-import cv2, docopt
-import os, sys, json
-import PIL.Image
-pj = os.path.join
-
-# https://hackaday.io/project/12384-autofan-automated-control-of-air-flow/log/41862-correcting-for-lens-distortions
-# http://docs.opencv.org/3.3.0/dc/dbb/tutorial_py_calibration.html
-# https://codeyarns.com/2014/01/16/how-to-convert-between-numpy-array-and-pil-image/
+import cv2, os, PIL.Image
 
 # numpy: shape = (hh, ww) = (nrows, ncols)
 # opencv: size = (ww, hh)
@@ -168,7 +136,7 @@ def apply(img_names, dr='converted'):
 
     cm = {}
     for ifn,fn in enumerate(img_names):
-        tgt = pj(dr, os.path.basename(fn))
+        tgt = os.path.join(dr, os.path.basename(fn))
         if os.path.exists(tgt):
             print("skip: {}".format(fn))
             continue
@@ -190,36 +158,3 @@ def apply(img_names, dr='converted'):
 
         im = PIL.Image.fromarray(cv2.remap(src, mapx, mapy, cv2.INTER_LINEAR))
         im.save(tgt, exif=pil_img.info["exif"])
-
-
-if __name__ == '__main__':
-    args = docopt.docopt(__doc__, options_first=False)
-
-    if args['calib']:
-        if args['--max-rms']:
-            with open('rms_db.json') as fd:
-                rms_db = json.load(fd)
-            files = [k for k,v in rms_db.items() if v < float(args['--max-rms'])]
-        else:
-            files = args['<files>']
-        ret = calibrate(files, fraction=float(args['--fraction']))
-        if ret:
-            print("rms: {}".format(ret['rms']))
-            np.save('camera_matrix.npy', ret['camera_matrix'])
-            np.save('coeffs.npy', ret['coeffs'])
-        else:
-            print("unable to process data")
-    elif args['prep']:
-        rms_db = {}
-        for fn in args['<files>']:
-            ret = calibrate([fn], fraction=float(args['--fraction']))
-            if ret:
-                rms_db[fn] = ret['rms']
-                print("{fn}: {rms}".format(fn=fn, rms=ret['rms']))
-            else:
-                print("#{fn}: no data".format(fn=fn))
-        with open('rms_db.json', 'w') as fd:
-            json.dump(rms_db, fd, indent=2)
-    elif args['apply']:
-        apply(args['<files>'], dr=args['--dir'])
-
