@@ -1,0 +1,4 @@
+* expose pattern_size as command line parameter
+* move technical notes (OpenCV-related mostly: termination criteria, lens
+  model) for code to README -- stress that!!
+* mention number of calib images
