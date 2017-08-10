@@ -6,3 +6,4 @@ chess_pics/
 coeffs.npy
 corrected/
 real_pics/
+__pycache__
