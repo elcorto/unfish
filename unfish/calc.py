@@ -4,7 +4,8 @@ import cv2, os, PIL.Image
 # numpy: shape = (hh, ww) = (nrows, ncols)
 # opencv: size = (ww, hh)
 
-def calibrate(img_names, fraction=0.2, maxiter=30, tol=0.1, pattern_size=(9,6)):
+def calibrate(img_names, fraction=0.2, maxiter=30, tol=0.1, pattern_size=(9,6),
+              disp=False):
     """
     Parameters
     ----------
@@ -17,31 +18,34 @@ def calibrate(img_names, fraction=0.2, maxiter=30, tol=0.1, pattern_size=(9,6)):
         calibrateCamera, see opencv docs
     pattern_size : tuple
         size of chessboard pattern (number of corners)
+    disp : bool
+        display found chessboard corners during calibration
 
     Notes
     -----
     termination criteriam : maxiter=1000 and tol=0.0001 makes results worse
     again (too much counter-bending at the image corners) .. strange
     
-    fraction : original images scaled down by factor `fraction` because
-    calibration is 
-    MUCH faster and the accuracy of findChessboardCorners on the scaled down
-    calibration images is by far enough. Difference of 1/fraction to exact
-    scale factors based on image size: example w/ actual scaled image sizes
-    for fraction=0.2, so 1/fraction = 5.0:
+    fraction : We usually scale the original calibration images down by factor
+    `fraction` because calibration is MUCH faster and the accuracy of
+    findChessboardCorners on the scaled down calibration images is by far
+    enough. Difference of 1/fraction to exact scale factors based on image
+    size: example w/ actual scaled image sizes for fraction=0.2, so 1/fraction
+    = 5.0:
         3264/653.0 = 4.998468606431853
         2448/490.0 = 4.995918367346939
     """ 
     term = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, maxiter, tol)
     scale_h = scale_w = img_points_scale = 1.0/fraction
     
-    # XXX quite involved numpyology here, can this be dome in a simpler way??
-    # rectangular grid of chessboard corners, viewed along chessboard plane
-    # normal vector; z coord is zero; the "real" object = the undistorted chessboard
+    # XXX quite involved numpyology here
+    # pattern_points.shape = (54,3), pattern_points[:,2] = 0.0: rectangular
+    # grid of chessboard corners (54,2), viewed along chessboard plane
+    # normal vector; z coord is zero; the "real" object = the undistorted
+    # chessboard
     pattern_points = np.zeros((np.prod(pattern_size), 3), np.float32 )
     pattern_points[:,:2] = np.indices(pattern_size).T.reshape(-1, 2)
     
-    # XXX get rid of pattern_points_lst, it a list of the same numpy array
     pattern_points_lst = []
     img_points_lst = []
     shape_old = None
@@ -65,23 +69,27 @@ def calibrate(img_names, fraction=0.2, maxiter=30, tol=0.1, pattern_size=(9,6)):
             # much
             corners_fine = corners.copy() * img_points_scale
             cv2.cornerSubPix(img, corners_fine, (5, 5), (-1, -1), term)
-##            cv2.drawChessboardCorners(img, pattern_size, corners, found)
-##            cv2.imshow('img',img)
-##            cv2.waitKey(5000)
+            if disp:
+                cv2.drawChessboardCorners(img, pattern_size, corners, found)
+                cv2.imshow('img',img)
+                cv2.waitKey(5000)
             # corners_fine.reshape(-1,2).shape == (54,2)
             # list of (54,2) arrays, coords of chessboard corners in original
             # image pixel coords scale (img_points_scale applied)
             img_points_lst.append(corners_fine.reshape(-1, 2))
             shape_old = shape
-            # XXX useless, list of the same array over and over!! optimize!!!
+            # Yes, we append the same array over and over, yes this is
+            # ridiculous, but the API of calibrateCamera() wants it that way.
+            # We could also count the number of valid calibration images or
+            # smth ...
             pattern_points_lst.append(pattern_points)
         else:
             print('chessboard not found')
             continue
 
-##    # XXX only if we use drawChessboardCorners() !!!
-##    # not implemented in pip3-installed version of opencv
-##    cv2.destroyAllWindows()
+    if disp:
+        # not implemented in pip3-installed version of opencv
+        cv2.destroyAllWindows()
 
     if len(pattern_points_lst) > 0:
         print("calibrateCamera")
@@ -96,15 +104,17 @@ def calibrate(img_names, fraction=0.2, maxiter=30, tol=0.1, pattern_size=(9,6)):
         # however, doesn't make the results any better :)
         flags = cv2.CALIB_RATIONAL_MODEL
         ##flags = cv2.CALIB_RATIONAL_MODEL + cv2.CALIB_THIN_PRISM_MODEL
-        ##flags = cv2.CALIB_RATIONAL_MODEL + cv2.CALIB_THIN_PRISM_MODEL + cv2.CALIB_TILTED_MODEL
-        rms, camera_matrix, coeffs, rvecs, tvecs = cv2.calibrateCamera(pattern_points_lst,
-                                                                       img_points_lst,
-                                                                       size,
-                                                                       None,
-                                                                       None, None,
-                                                                       None,
-                                                                       flags,
-                                                                       term)
+        ##flags = cv2.CALIB_RATIONAL_MODEL + cv2.CALIB_THIN_PRISM_MODEL + \
+        ##    cv2.CALIB_TILTED_MODEL
+        rms, camera_matrix, coeffs, rvecs, tvecs = \
+                cv2.calibrateCamera(pattern_points_lst,
+                                    img_points_lst,
+                                    size,
+                                    None,
+                                    None, None,
+                                    None,
+                                    flags,
+                                    term)
         return {'camera_matrix': camera_matrix, 'rms': rms, 'coeffs': coeffs}
     else:
         return None
@@ -146,14 +156,16 @@ def apply(img_names, dr='converted'):
         size_src = (ww, hh)
         print("{} {}".format(fn, size_src))
         if not cm.get(size_src,None):
-            camera_matrix_new, roi = cv2.getOptimalNewCameraMatrix(camera_matrix,
-                                                                   coeffs, size_src, 0,
-                                                                   size_src)
+            camera_matrix_new, roi = \
+                    cv2.getOptimalNewCameraMatrix(camera_matrix,
+                                                  coeffs, size_src, 0,
+                                                  size_src)
             print("new camera matrix for size: {}".format(size_src))
             cm[size_src] = {'cm': camera_matrix_new,
                             'roi': roi}
         mapx, mapy = cv2.initUndistortRectifyMap(camera_matrix, coeffs,
-                                                 None, cm[size_src]['cm'], size_src,
+                                                 None, cm[size_src]['cm'], 
+                                                 size_src,
                                                  cv2.CV_32FC1)
 
         im = PIL.Image.fromarray(cv2.remap(src, mapx, mapy, cv2.INTER_LINEAR))
