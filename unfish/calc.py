@@ -1,4 +1,5 @@
 import numpy as np
+from itertools import product
 import cv2, os, PIL.Image
 
 # numpy: shape = (hh, ww) = (nrows, ncols)
@@ -38,14 +39,12 @@ def calibrate(img_names, fraction=0.2, maxiter=30, tol=0.1, pattern_size=(9,6),
     term = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, maxiter, tol)
     scale_h = scale_w = img_points_scale = 1.0/fraction
     
-    # XXX quite involved numpyology here
     # pattern_points.shape = (54,3), pattern_points[:,2] = 0.0: rectangular
     # grid of chessboard corners (54,2), viewed along chessboard plane
     # normal vector; z coord is zero; the "real" object = the undistorted
     # chessboard
-    pattern_points = np.zeros((np.prod(pattern_size), 3), np.float32 )
-    pattern_points[:,:2] = np.indices(pattern_size).T.reshape(-1, 2)
-    
+    itrs = ([0], range(pattern_size[1]), range(pattern_size[0]))
+    pattern_points = np.array(list(product(*itrs)), np.float32)[:,::-1]
     pattern_points_lst = []
     img_points_lst = []
     shape_old = None
