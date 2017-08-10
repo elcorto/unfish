@@ -1,9 +1,10 @@
 #!/bin/sh
 
-# usage: this.sh orig/ small/
+# usage: this.sh 0.2 orig/ small/
 
-orig=$1
-small=$2
+percent=$(echo "$1 * 100" | bc)
+orig=$2
+small=$3
 
 for fn in $orig/*; do 
     tgt=$small/$(basename $fn)
@@ -11,6 +12,6 @@ for fn in $orig/*; do
         echo "skip: $fn"
     else
         echo "      $fn"
-        convert -resize 20% $fn $tgt
+        convert -resize ${percent}% $fn $tgt
     fi
 done
