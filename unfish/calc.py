@@ -1,6 +1,7 @@
 import numpy as np
 from itertools import product
 import cv2, os, PIL.Image
+pj = os.path.join
 
 # numpy: shape = (hh, ww) = (nrows, ncols)
 # opencv: size = (ww, hh)
@@ -119,7 +120,7 @@ def calibrate(img_names, fraction=0.2, maxiter=30, tol=0.1, pattern_size=(9,6),
         return None
 
 
-def apply(img_names, dr='converted'):
+def apply(img_names, resultdir='converted', datadir='.'):
     """Apply image corrections (revert fisheye). Use camera matrix and model
     coeffs written by :func:`calibrate`.
 
@@ -127,7 +128,7 @@ def apply(img_names, dr='converted'):
     ----------
     img_names : sequence
         list of to-be-corrected image files
-    dr : str
+    resultdir : str
         directory to which we write the corrected images
     """
     # EXIF: cv2.imread() / cv2.imwrite() use plain numpy 3d arrays, we need
@@ -135,17 +136,15 @@ def apply(img_names, dr='converted'):
     # (orientation, date, camera model, etc, with orientation being the
     # most important information)
 
-    # XXX use common data storage w/ calibrate() such as .unfish/ or simply put
-    # all infos in a dict and pickle to disk, or use a hdf5 file
-    camera_matrix = np.load('camera_matrix.npy')
-    coeffs = np.load('coeffs.npy')
+    camera_matrix = np.load(pj(datadir, 'camera_matrix.npy'))
+    coeffs = np.load(pj(datadir, 'coeffs.npy'))
 
-    if not os.path.exists(dr):
-        os.makedirs(dr)
+    if not os.path.exists(resultdir):
+        os.makedirs(resultdir)
 
     cm = {}
     for ifn,fn in enumerate(img_names):
-        tgt = os.path.join(dr, os.path.basename(fn))
+        tgt = os.path.join(resultdir, os.path.basename(fn))
         if os.path.exists(tgt):
             print("skip: {}".format(fn))
             continue

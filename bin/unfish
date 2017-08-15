@@ -2,9 +2,9 @@
 
 """
 usage:
-    unfish prep [-f <fraction> ] <files>...
-    unfish calib [-r <max-rms> -f <fraction>] <files>...
-    unfish apply [ -d <dir>] <files>...
+    unfish prep [-f <fraction>] (-p <pattern-size> <files>...)
+    unfish calib [-r <max-rms> -f <fraction>] (-p <pattern-size> <files>...)
+    unfish apply <files>...
 
 commands:
     prep   optional preparation run, create rms_db.json
@@ -14,49 +14,61 @@ commands:
 
 
 options:
+    -p <pattern-size>, --pattern-size <pattern-size>  size of the chessboard
+            (number of corners) in the calibration images, e.g. "9x6"
     -f <fraction>, --fraction <fraction>  fraction by which calibration files
             have been scaled down (see makesmall.sh)
     -r <max-rms>, --max-rms <max-rms>  in calibration, use only files with
             rms reprojection error less than <max-rms>, uses rms_db.json
             written by "prep"
-    -d <dir>, --dir <dir>  dir where to write corrected images 
-            [default: corrected]
 """
 
 import numpy as np
-import docopt
-import json
-
+import docopt, os, json
 from unfish.calc import calibrate, apply
+pj = os.path.join
+
 
 if __name__ == '__main__':
     args = docopt.docopt(__doc__, options_first=False)
-
-    if args['calib']:
-        if args['--max-rms']:
-            with open('rms_db.json') as fd:
-                rms_db = json.load(fd)
-            files = [k for k,v in rms_db.items() if v < float(args['--max-rms'])]
-        else:
-            files = args['<files>']
-        ret = calibrate(files, fraction=float(args['--fraction']))
-        if ret:
-            print("rms: {}".format(ret['rms']))
-            np.save('camera_matrix.npy', ret['camera_matrix'])
-            np.save('coeffs.npy', ret['coeffs'])
-        else:
-            print("unable to process data")
-    elif args['prep']:
+    datadir = './unfish_data'
+    resultdir = './corrected_images'
+    rms_db_fn = pj(datadir, 'rms_db.json')
+    pattern_size = lambda: tuple(map(int, args['--pattern-size'].split('x')))
+    if args['prep']:
+        os.makedirs(datadir, exist_ok=True)
         rms_db = {}
         for fn in args['<files>']:
-            ret = calibrate([fn], fraction=float(args['--fraction']))
+            ret = calibrate([fn], fraction=float(args['--fraction']),
+                            pattern_size=pattern_size())
             if ret:
                 rms_db[fn] = ret['rms']
                 print("{fn}: {rms}".format(fn=fn, rms=ret['rms']))
             else:
                 print("#{fn}: no data".format(fn=fn))
-        with open('rms_db.json', 'w') as fd:
+        with open(rms_db_fn, 'w') as fd:
             json.dump(rms_db, fd, indent=2)
+    elif args['calib']:
+        os.makedirs(datadir, exist_ok=True)
+        if args['--max-rms']:
+            if not os.path.exists(rms_db_fn):
+                raise FileNotFoundError("{} not found, run 'unfish prep' "
+                                        "first".format(rms_db_fn))
+            else:
+                with open(rms_db_fn) as fd:
+                    rms_db = json.load(fd)
+                files = [k for k,v in rms_db.items()
+                         if v < float(args['--max-rms'])]
+        else:
+            files = args['<files>']
+        ret = calibrate(files, fraction=float(args['--fraction']),
+                        pattern_size=pattern_size())
+        if ret:
+            print("rms: {}".format(ret['rms']))
+            np.save(pj(datadir, 'camera_matrix.npy'), ret['camera_matrix'])
+            np.save(pj(datadir, 'coeffs.npy'), ret['coeffs'])
+        else:
+            print("unable to process data")
     elif args['apply']:
-        apply(args['<files>'], dr=args['--dir'])
-
+        os.makedirs(resultdir, exist_ok=True)
+        apply(args['<files>'], resultdir=resultdir, datadir=datadir)
