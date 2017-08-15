@@ -91,3 +91,12 @@ chessboard
 .. _chessboard: https://github.com/opencv/opencv/blob/master/samples/data/chessboard.png
 .. _chessboard_old: http://docs.opencv.org/2.4/_downloads/pattern.png
 
+install
+-------
+To let pip install all deps for you::
+
+    $ git clone ...
+    $ pip3 install -e .
+
+This will install a recent version of OpenCV (3.x) and python3 bindings, both
+of which is not in Debian testing ATM.
