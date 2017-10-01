@@ -1,6 +1,9 @@
 #!/usr/bin/python3
 
-"""
+datadir = './unfish_data'
+resultdir = './corrected_images'
+
+doc = """
 usage:
     unfish prep [-f <fraction>] (-p <pattern-size> <files>...)
     unfish calib [-r <max-rms> -f <fraction>] (-p <pattern-size> <files>...)
@@ -9,9 +12,9 @@ usage:
 commands:
     prep   optional preparation run, create rms_db.json
     calib  calibration run, calculate and write camera matrix and camera model
-           coeffs using chessboard calibration images
-    apply  apply correction model to images
-
+           coeffs using chessboard calibration images to {datadir}
+    apply  apply correction model to images, images are written to
+           {resultdir}
 
 options:
     -p <pattern-size>, --pattern-size <pattern-size>  size of the chessboard
@@ -21,7 +24,8 @@ options:
     -r <max-rms>, --max-rms <max-rms>  in calibration, use only files with
             rms reprojection error less than <max-rms>, uses rms_db.json
             written by "prep"
-"""
+""".format(datadir=datadir, resultdir=resultdir)
+
 
 import numpy as np
 import docopt, os, json
@@ -30,9 +34,7 @@ pj = os.path.join
 
 
 if __name__ == '__main__':
-    args = docopt.docopt(__doc__, options_first=False)
-    datadir = './unfish_data'
-    resultdir = './corrected_images'
+    args = docopt.docopt(doc, options_first=False)
     rms_db_fn = pj(datadir, 'rms_db.json')
     pattern_size = lambda: tuple(map(int, args['--pattern-size'].split('x')))
     if args['prep']:

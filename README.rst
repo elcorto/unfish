@@ -5,7 +5,7 @@ about
 This is basically a packaged up, command lined and polished version of the
 OpenCV tutorial_ (see also hack_) which shows how to correct lens distortions
 in images using OpenCV, based on chessboard calibration images taken with the
-same camera. 
+same camera.
 
 In my case, my mobile phone camera introduces a radial distortion (inverse
 fisheye effect), hence the name.
@@ -26,11 +26,11 @@ The script ``bin/unfish`` does all this and a little more::
         unfish apply <files>...
 
     commands:
-        prep   optional preparation run, creates rms_db.json
+        prep   optional preparation run, create rms_db.json
         calib  calibration run, calculate and write camera matrix and camera model
-               coeffs using chessboard calibration images
-        apply  apply correction model to images
-
+               coeffs using chessboard calibration images to ./unfish_data
+        apply  apply correction model to images, images are written to
+               ./corrected_images
 
     options:
         -p <pattern-size>, --pattern-size <pattern-size>  size of the chessboard
@@ -56,11 +56,12 @@ affected camera, like this one:
 
 Next, a calibration run will calculate correction parameters (camera matrix and
 lens model coefficients, written to ``./unfish_data/``). Finally, you apply the
-correction to all affected images. 
+correction to all affected images. Corrected images are written to
+``./corrected_images``.
 
 We found that it is a very good idea to scale down the chessboard calibration
 images first. That makes the calibration part *a lot* faster (else the code
-which searches for chessboard corners will run forever). 
+which searches for chessboard corners will run forever).
 
 Here is what you need to do, using a 9x6 chessboard.
 
@@ -84,7 +85,7 @@ chessboard
 ``<max-rms>``
     We found that excluding calibration images with a high per-image RMS
     reprojection error (``unfish calib -r <max-rms> ...``) doesn't actually
-    improve the overall calibration, not sure why yet. 
+    improve the overall calibration, not sure why yet.
 
 .. _tutorial: http://docs.opencv.org/3.3.0/dc/dbb/tutorial_py_calibration.html
 .. _hack: https://hackaday.io/project/12384-autofan-automated-control-of-air-flow/log/41862-correcting-for-lens-distortions
