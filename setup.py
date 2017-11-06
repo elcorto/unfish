@@ -46,7 +46,7 @@ setup(
     url='https://github.com/elcorto/unfish',
     author='Steve Schmerler',
     author_email='git@elcorto.com',
-    license='GPLv3',
+    license='BSD 3-Clause',
     keywords='camera fisheye opencv',
     packages=['unfish'],
     install_requires=install_requires,
