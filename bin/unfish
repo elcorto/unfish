@@ -7,7 +7,7 @@ doc = """
 usage:
     unfish prep [-f <fraction>] (-p <pattern-size> <files>...)
     unfish calib [-r <max-rms> -f <fraction>] (-p <pattern-size> <files>...)
-    unfish apply <files>...
+    unfish apply [-k <keep-path-levels>] <files>...
 
 commands:
     prep   optional preparation run, create rms_db.json
@@ -24,6 +24,9 @@ options:
     -r <max-rms>, --max-rms <max-rms>  in calibration, use only files with
             rms reprojection error less than <max-rms>, uses rms_db.json
             written by "prep"
+    -k <keep-path-levels>  keep that many path levels from <files>, e.g.
+            files = /a/b/c/file1,/a/b/c/file2, and -k2, then store
+            {resultdir}/a/b/fileX instead of {resultdir}/fileX  [default: 0]
 """.format(datadir=datadir, resultdir=resultdir)
 
 
@@ -72,5 +75,5 @@ if __name__ == '__main__':
         else:
             print("unable to process data")
     elif args['apply']:
-        os.makedirs(resultdir, exist_ok=True)
-        apply(args['<files>'], resultdir=resultdir, datadir=datadir)
+        apply(args['<files>'], resultdir=resultdir, datadir=datadir,
+              keep_path_levels=int(args['-k']))
