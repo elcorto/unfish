@@ -2,10 +2,10 @@ unfish -- correct fisheye distortions in images using OpenCV
 
 about
 -----
-This is basically a packaged up, command lined and polished version of the
-OpenCV tutorial_ (see also hack_) which shows how to correct lens distortions
-in images using OpenCV, based on chessboard calibration images taken with the
-same camera.
+This is basically a packaged and polished version of the OpenCV tutorial_ (see
+also hack_) with a command line interface. It shows how to correct lens
+distortions in images using OpenCV, based on chessboard calibration images
+taken with the same camera.
 
 In my case, my mobile phone camera introduces a radial distortion (inverse
 fisheye effect), hence the name.
@@ -23,7 +23,7 @@ The script ``bin/unfish`` does all this and a little more::
     usage:
         unfish prep [-f <fraction>] (-p <pattern-size> <files>...)
         unfish calib [-r <max-rms> -f <fraction>] (-p <pattern-size> <files>...)
-        unfish apply <files>...
+        unfish apply [-k <keep-path-levels>] <files>...
 
     commands:
         prep   optional preparation run, create rms_db.json
@@ -36,10 +36,13 @@ The script ``bin/unfish`` does all this and a little more::
         -p <pattern-size>, --pattern-size <pattern-size>  size of the chessboard
                 (number of corners) in the calibration images, e.g. "9x6"
         -f <fraction>, --fraction <fraction>  fraction by which calibration files
-                have been scaled down (see makesmall.sh)
+                have been scaled down (see bin/resize.sh)
         -r <max-rms>, --max-rms <max-rms>  in calibration, use only files with
                 rms reprojection error less than <max-rms>, uses rms_db.json
                 written by "prep"
+        -k <keep-path-levels>  keep that many path levels from <files>, e.g.
+                files = /a/b/c/file1,/a/b/c/file2, and -k2, then store
+                ./corrected_images/a/b/fileX instead of ./corrected_images/fileX  [default: 0]
 
 In addition to the tutorial_, we added things like the ability to calculate the
 RMS reprojection error per calibration image (``unfish prep``), in order to get
@@ -67,7 +70,7 @@ Here is what you need to do, using a 9x6 chessboard.
 
 ::
 
-    $ makesmall.sh 0.2 chess_pics/orig chess_pics/small
+    $ ./bin/resize.sh 0.2 chess_pics/orig chess_pics/small
     $ unfish calib -f 0.2 -p 9x6 chess_pics/small/*
     $ unfish apply affected_pics/orig/*
 
@@ -98,6 +101,3 @@ To let pip install all deps for you::
 
     $ git clone ...
     $ pip3 install -e .
-
-This will install a recent version of OpenCV (3.x) and python3 bindings, both
-of which is not in Debian testing ATM.
