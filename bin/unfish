@@ -20,7 +20,7 @@ options:
     -p <pattern-size>, --pattern-size <pattern-size>  size of the chessboard
             (number of corners) in the calibration images, e.g. "9x6"
     -f <fraction>, --fraction <fraction>  fraction by which calibration files
-            have been scaled down (see makesmall.sh)
+            have been scaled down (see makesmall.sh) [default: 1]
     -r <max-rms>, --max-rms <max-rms>  in calibration, use only files with
             rms reprojection error less than <max-rms>, uses rms_db.json
             written by "prep"
