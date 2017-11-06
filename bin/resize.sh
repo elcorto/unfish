@@ -1,6 +1,11 @@
 #!/bin/sh
 
-# usage: this.sh 0.2 orig/ small/
+# usage: 
+#   this.sh <scale> orig/ small/ 
+#
+# where <scale> is a number between 0 and 1 (or > 1 if you want bigger images
+# :) )
+
 
 percent=$(echo "$1 * 100" | bc)
 orig=$2
