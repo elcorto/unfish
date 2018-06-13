@@ -19,7 +19,9 @@ install_requires = []
 # ('numpy', 'numpy', '>', '1.0')
 reqs = [('numpy', 'numpy', None, None),
         ('docopt', 'docopt', None, None),
-        ('opencv-python', 'cv2', '>=', '3.0')]
+        ('opencv-python', 'cv2', '>=', '3.0'),
+        ('Pillow', 'PIL', None, None),
+        ]
 
 
 for pip_name,import_name,op,ver in reqs:
