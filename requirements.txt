@@ -1,0 +1,4 @@
+numpy
+docopt
+opencv-python
+Pillow
